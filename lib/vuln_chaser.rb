@@ -4,7 +4,7 @@ require "vuln_chaser/flow_tracer"
 module VulnChaser
   def self.start(base_path: nil)
     @base_path = base_path || default_base_path
-    @tracer. = FlowTracer.new(base_path: @base_path)
+    @tracer = FlowTracer.new(base_path: @base_path)
     @tracer.start
   end
 
