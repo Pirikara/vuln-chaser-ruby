@@ -1,4 +1,5 @@
 require "json"
+require "method_source"
 
 module VulnChaser
   class FlowTracer
@@ -8,6 +9,7 @@ module VulnChaser
     end
 
     def start
+      puts "Starting flow tracer..."
       @trace_point = TracePoint.new(:call, :return) do |tp|
         if relevant?(tp)
           record_trace(tp)
@@ -17,6 +19,7 @@ module VulnChaser
     end
 
     def stop
+      puts "Stopping flow tracer..."
       @trace_point.disable
       @trace_data
     end
@@ -33,17 +36,24 @@ module VulnChaser
     end
 
     def record_trace(tp)
+      return unless tp.event == :call
+
+      method = tp.defined_class.instance_method(tp.method_id)
+      source_code = method.source
+
       trace_entry = {
         event: tp.event,
         defined_class: tp.defined_class.to_s,
         method_id: tp.method_id.to_s,
         path: tp.path,
         lineno: tp.lineno,
-        source_code: tp.event == :call ? extract_full_method_source(tp.path, tp.lineno) : nil,
+        source_code: source_code,
         result: tp.event == :return ? truncate_large_data(tp.return_value) : nil,
         arguments: tp.event == :call ? process_arguments(tp.parameters, tp.binding) : nil
       }
       @trace_data << trace_entry
+    rescue MethodSource::SourceNotFoundError
+      return
     end
     
     def process_arguments(parameters, binding)
