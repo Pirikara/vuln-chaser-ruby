@@ -1,24 +1,19 @@
 require "vuln_chaser/version"
+require "vuln_chaser/config"
 require "vuln_chaser/flow_tracer"
+require "vuln_chaser/trace_context"
+require "vuln_chaser/trace_store"
+require "vuln_chaser/security_analyzer"
+require "vuln_chaser/middleware"
+require 'rails/generators'
+require 'generators/vuln_chaser/install_generator'
 
 module VulnChaser
-  def self.start(base_path: nil)
-    @base_path = base_path || default_base_path
-    @tracer = FlowTracer.new(base_path: @base_path)
-    @tracer.start
+  class << self
+    def configure
+      yield(Config)
+    end
   end
 
-  def self.stop
-    @tracer.stop
-  end
-
-  def self.traces
-    @tracer.traces
-  end
-
-  private
-
-  def self.default_base_path
-    defined?(Rails) && Rails.respond_to?(:root) ? Rails.root.to_s : Dir.pwd
-  end
+  class Error < StandardError; end
 end
