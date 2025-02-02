@@ -29,8 +29,8 @@ module VulnChaser
       Rails.logger.info "VulnChaser: Stopping flow tracer..."
       @trace_point.disable
       traces = @trace_data
-      @trace_data = [] # クリア
-      traces # 収集したトレースを返す
+      @trace_data = []
+      traces
     end
 
     private

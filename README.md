@@ -8,21 +8,31 @@ TODO: Delete this and the text above, and describe your gem
 
 Add this line to your application's Gemfile:
 
-```ruby
-gem 'vuln-chaser'
+```bash
+$ git clone https://github.com/Pirikara/vuln-chaser.git
 ```
 
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install vuln-chaser
+Add to your Gemfile:
+```ruby
+group: development do
+  gem 'vuln_chaser', path: '/path/to/vuln-chaser'
+end
+```
 
 ## Usage
-
-TODO: Write usage instructions here
+1. Setup the gem
+```bash
+$ bin/rails generate vuln_chaser:install
+```
+2. add the following to your `config/application.rb`
+```ruby
+require 'vuln_chaser'
+class Application < Rails::Application
+  ...
+  config.middleware.use VulnChaser::Middleware
+  ...
+end
+```
 
 ## Development
 
