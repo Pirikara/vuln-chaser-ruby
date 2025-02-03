@@ -3,7 +3,6 @@ require "vuln_chaser/config"
 require "vuln_chaser/flow_tracer"
 require "vuln_chaser/trace_context"
 require "vuln_chaser/trace_store"
-require "vuln_chaser/security_analyzer"
 require "vuln_chaser/middleware"
 require 'rails/generators'
 require 'generators/vuln_chaser/install_generator'
@@ -15,5 +14,5 @@ module VulnChaser
     end
   end
 
-  class Error < StandardError; end
+  class VulnChaserTraceError < StandardError; end
 end
