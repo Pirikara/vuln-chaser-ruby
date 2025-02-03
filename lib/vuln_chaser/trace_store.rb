@@ -24,7 +24,6 @@ module VulnChaser
       existing = @storage[endpoint]
       return false unless existing
       
-      # 簡易的な重複チェック
       existing[:traces] == trace_data[:traces]
     end
   end
