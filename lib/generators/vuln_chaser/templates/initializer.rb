@@ -9,4 +9,7 @@ VulnChaser.configure do |config|
 
   # Paths to exclude from tracing
   config.excluded_paths = ['/health_check', '/assets']
+  
+  # Custom paths to include in tracing
+  config.custom_paths = []
 end
