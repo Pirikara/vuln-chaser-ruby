@@ -45,8 +45,6 @@ module VulnChaser
         event: tp.event,
         defined_class: tp.defined_class.to_s,
         method_id: tp.method_id.to_s,
-        path: tp.path,
-        lineno: tp.lineno,
         source_code: method.source,
         source_location: method.source_location,
         timestamp: Time.current
