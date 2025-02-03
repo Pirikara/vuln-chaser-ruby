@@ -1,4 +1,7 @@
 name: vuln-chaser RSpec
+permissions:
+  contents: read
+  pull_requests: write
 
 on: [push, pull_request]
 
@@ -16,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Ruby ${{ matrix.ruby-version }}
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@2654679fe7f7c29875c669398a8ec0791b8a64a1
         with:
           ruby-version: ${{ matrix.ruby-version }}
 
