@@ -1,0 +1,27 @@
+name: vuln-chaser RSpec
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: Unit test
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby-version:
+          - 3.2
+          - 3.3
+          - 3.4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby ${{ matrix.ruby-version }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Run tests
+        run: bundle exec rspec
