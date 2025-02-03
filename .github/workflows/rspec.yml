@@ -1,7 +1,6 @@
 name: vuln-chaser RSpec
 permissions:
   contents: read
-  pull_requests: write
 
 on: [push, pull_request]
 
