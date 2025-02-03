@@ -104,8 +104,6 @@ RSpec.describe VulnChaser::FlowTracer do
         event: :call,
         defined_class: 'String',
         method_id: 'upcase',
-        path: "#{base_path}/app/models/user.rb",
-        lineno: 10,
         source_code: 'def upcase; end',
         source_location: ['file.rb', 1]
       )
