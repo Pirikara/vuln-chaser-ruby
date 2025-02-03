@@ -31,7 +31,7 @@ module VulnChaser
     private
 
     def relevant?(tp)
-      return true if VulnChaser::Config.custom_paths.any? { |path| tp.path.include?(path) }
+      return true if VulnChaser::Config.custom_paths && VulnChaser::Config.custom_paths.any? { |path| tp.path.include?(path) }
       tp.path.start_with?(@base_path)
     end
 
