@@ -3,11 +3,6 @@ require "method_source"
 
 module VulnChaser
   class FlowTracer
-    SECURITY_SENSITIVE_METHODS = [
-      :where, :find_by, :execute, :html_safe, :raw,
-      :render, :redirect_to, :send_file
-    ]
-
     def initialize(base_path:)
       @base_path = base_path
       @trace_data = []
@@ -36,6 +31,7 @@ module VulnChaser
     private
 
     def relevant?(tp)
+      return true if VulnChaser::Config.custom_paths.any? { |path| tp.path.include?(path) }
       tp.path.start_with?(@base_path)
     end
 
