@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = %q{Vuln Chaser}
   spec.description   = %q{Vuln Chaser}
-  spec.homepage      = "https://github.com/Pirikara"
+  spec.homepage      = "https://github.com/Pirikara/vuln-chaser"
   spec.license       = "MIT"
 
   # Prevent pushing this gem to RubyGems.org. To allow pushes either set the 'allowed_push_host'
@@ -32,8 +32,7 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "rails", ">= 6.0"
-  spec.add_dependency "ruby-openai", "~> 4.0"
+  spec.add_dependency "rails", ">= 7.0"
   spec.add_dependency "method_source", "~> 1.0"
 
   spec.add_development_dependency "rspec", "~> 3.0"
