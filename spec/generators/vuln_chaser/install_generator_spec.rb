@@ -30,5 +30,18 @@ RSpec.describe VulnChaser::Generators::InstallGenerator do
       storage_path = File.join(destination_root, 'tmp/vuln_chaser')
       expect(Dir.exist?(storage_path)).to be true
     end
+
+    context 'when Rails.env.development? is false' do
+      before do
+        allow(Rails).to receive(:env).and_return(double(development?: false))
+      end
+
+      it 'creates an empty initializer' do
+        generator.create_initializer
+        initializer_path = File.join(destination_root, 'config/initializers/vuln_chaser.rb')
+        load initializer_path
+        expect(VulnChaser::Config.custom_paths).to be_nil
+      end
+    end
   end
 end
