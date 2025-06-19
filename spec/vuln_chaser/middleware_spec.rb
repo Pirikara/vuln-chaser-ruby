@@ -19,6 +19,11 @@ RSpec.describe VulnChaser::Middleware do
     allow(flow_tracer).to receive(:stop).and_return(traces)
     allow(context).to receive(:to_hash).and_return(trace_hash)
     allow(trace_store).to receive(:store)
+    
+    # Setup new TraceBuffer
+    trace_buffer = double('TraceBuffer')
+    allow(VulnChaser).to receive(:trace_buffer).and_return(trace_buffer)
+    allow(trace_buffer).to receive(:add_trace)
   end
 
   describe '#call' do
@@ -28,7 +33,8 @@ RSpec.describe VulnChaser::Middleware do
 
         expect(flow_tracer).to have_received(:start).with(context)
         expect(flow_tracer).to have_received(:stop)
-        expect(trace_store).to have_received(:store).with(trace_hash)
+        trace_buffer = VulnChaser.trace_buffer
+        expect(trace_buffer).to have_received(:add_trace).with(trace_hash)
         expect(status).to eq(200)
       end
     end
@@ -41,7 +47,8 @@ RSpec.describe VulnChaser::Middleware do
 
         expect(flow_tracer).to have_received(:start).with(context)
         expect(flow_tracer).to have_received(:stop)
-        expect(trace_store).not_to have_received(:store)
+        trace_buffer = VulnChaser.trace_buffer
+        expect(trace_buffer).not_to have_received(:add_trace)
         expect(status).to eq(500)
       end
     end

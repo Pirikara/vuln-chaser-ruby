@@ -15,7 +15,7 @@ module VulnChaser
       puts "Stopping chaser..."
       traces = @flow_tracer.stop
 
-      TraceStore.instance.store(context.to_hash(traces)) if response[0].to_i == 200
+      VulnChaser.trace_buffer.add_trace(context.to_hash(traces)) if response[0].to_i == 200
       
       response
     end
