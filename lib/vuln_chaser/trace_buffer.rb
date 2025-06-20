@@ -3,7 +3,7 @@ require 'time'
 
 module VulnChaser
   class TraceBuffer
-    FLUSH_SIZE_THRESHOLD = 10
+    FLUSH_SIZE_THRESHOLD = 1
     FLUSH_TIME_THRESHOLD = 30 # seconds
     MAX_BUFFER_SIZE = 100 # prevent memory overflow
 
@@ -50,8 +50,9 @@ module VulnChaser
     private
 
     def flush_if_needed
-      should_flush = @buffer.size >= FLUSH_SIZE_THRESHOLD || 
+      should_flush = @buffer.size >= FLUSH_SIZE_THRESHOLD ||
                      (Time.now - @last_flush) > FLUSH_TIME_THRESHOLD
+      VulnChaser.logger&.info("VulnChaser: TraceBuffer - should_flush: #{should_flush}, buffer_size: #{@buffer.size}")
 
       if should_flush && !@buffer.empty?
         traces_to_send = @buffer.dup
