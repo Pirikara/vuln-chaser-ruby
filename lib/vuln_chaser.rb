@@ -5,7 +5,7 @@ require "vuln_chaser/execution_tracer"
 require "vuln_chaser/trace_context"
 require "vuln_chaser/trace_buffer"
 require "vuln_chaser/async_trace_sender"
-require "vuln_chaser/enhanced_middleware"
+require "vuln_chaser/middleware"
 require 'rails/generators'
 require 'generators/vuln_chaser/install_generator'
 
