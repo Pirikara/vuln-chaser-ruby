@@ -64,6 +64,53 @@ module VulnChaser
       sanitized
     end
 
+    # SOR Framework: Enhanced sanitization methods
+    def sanitize_env(env_data)
+      return {} unless env_data.is_a?(Hash)
+      
+      sanitized = {}
+      env_data.each do |key, value|
+        case key.to_s
+        when 'HTTP_AUTHORIZATION', 'HTTP_X_API_KEY'
+          sanitized[key] = '[FILTERED]'
+        when 'REMOTE_ADDR', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP'
+          sanitized[key] = mask_ip_address(value.to_s)
+        else
+          sanitized[key] = value
+        end
+      end
+      sanitized
+    end
+
+    def sanitize_session(session_data)
+      return {} unless session_data.is_a?(Hash)
+      
+      sanitized = {}
+      session_data.each do |key, value|
+        if sensitive_key?(key.to_s)
+          sanitized[key] = '[FILTERED]'
+        else
+          sanitized[key] = sanitize_value(key.to_s, value)
+        end
+      end
+      sanitized
+    end
+
+    def sanitize_headers(headers_data)
+      return {} unless headers_data.is_a?(Hash)
+      
+      sanitized = {}
+      headers_data.each do |key, value|
+        case key.to_s.downcase
+        when 'authorization', 'x-api-key', 'x-csrf-token'
+          sanitized[key] = '[FILTERED]'
+        else
+          sanitized[key] = value
+        end
+      end
+      sanitized
+    end
+
     private
 
     def sanitize_value(key, value)
@@ -154,6 +201,23 @@ module VulnChaser
         value.match?(CREDIT_CARD_PATTERN) ||
         value.match?(SSN_PATTERN) ||
         value.length > 100 # Very long strings might be sensitive
+    end
+
+    def mask_ip_address(ip)
+      return ip unless ip.is_a?(String)
+      
+      # Mask last octet of IPv4
+      if ip.match?(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)
+        parts = ip.split('.')
+        return "#{parts[0]}.#{parts[1]}.#{parts[2]}.***"
+      end
+      
+      # For IPv6 or other formats, mask partially
+      if ip.length > 8
+        "#{ip[0..3]}***#{ip[-4..-1]}"
+      else
+        ip
+      end
     end
   end
 end
