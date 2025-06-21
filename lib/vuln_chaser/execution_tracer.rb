@@ -63,21 +63,31 @@ module VulnChaser
     end
 
     def rails_app_code?(path)
-      return false unless defined?(Rails)
-      path.start_with?(Rails.root.to_s)
+      return false unless defined?(Rails) && Rails.respond_to?(:root) && Rails.root
+      
+      begin
+        path.start_with?(Rails.root.to_s)
+      rescue => e
+        false
+      end
     end
 
     # SOR Framework: Enhanced context extraction methods
     def extract_request_context
       return {} unless @current_request
       
-      {
-        env: extract_env_context,
-        session: extract_session_context,
-        headers: extract_headers_context,
-        remote_ip: @current_request.remote_ip,
-        user_agent: @current_request.user_agent
-      }
+      begin
+        {
+          env: extract_env_context,
+          session: extract_session_context,
+          headers: extract_headers_context,
+          remote_ip: @current_request.respond_to?(:remote_ip) ? @current_request.remote_ip : nil,
+          user_agent: @current_request.respond_to?(:user_agent) ? @current_request.user_agent : nil
+        }
+      rescue => e
+        VulnChaser.logger&.debug("VulnChaser: Failed to extract request context: #{e.message}")
+        {}
+      end
     end
 
     def extract_execution_context(tp)
@@ -103,48 +113,63 @@ module VulnChaser
     private
 
     def extract_env_context
-      return {} unless @current_request&.env
+      return {} unless @current_request&.respond_to?(:env) && @current_request.env
       
-      # Extract security-relevant environment variables
-      env_keys = %w[
-        REQUEST_METHOD PATH_INFO QUERY_STRING SERVER_NAME SERVER_PORT
-        HTTP_HOST HTTP_USER_AGENT HTTP_ACCEPT HTTP_ACCEPT_LANGUAGE
-        HTTP_ACCEPT_ENCODING HTTP_CONNECTION HTTP_CACHE_CONTROL
-        REMOTE_ADDR REMOTE_HOST REMOTE_USER CONTENT_TYPE CONTENT_LENGTH
-      ]
-      
-      extracted = {}
-      env_keys.each do |key|
-        extracted[key] = @current_request.env[key] if @current_request.env[key]
+      begin
+        # Extract security-relevant environment variables
+        env_keys = %w[
+          REQUEST_METHOD PATH_INFO QUERY_STRING SERVER_NAME SERVER_PORT
+          HTTP_HOST HTTP_USER_AGENT HTTP_ACCEPT HTTP_ACCEPT_LANGUAGE
+          HTTP_ACCEPT_ENCODING HTTP_CONNECTION HTTP_CACHE_CONTROL
+          REMOTE_ADDR REMOTE_HOST REMOTE_USER CONTENT_TYPE CONTENT_LENGTH
+        ]
+        
+        extracted = {}
+        env_keys.each do |key|
+          extracted[key] = @current_request.env[key] if @current_request.env[key]
+        end
+        
+        @data_sanitizer.sanitize_env(extracted)
+      rescue => e
+        VulnChaser.logger&.debug("VulnChaser: Failed to extract env context: #{e.message}")
+        {}
       end
-      
-      @data_sanitizer.sanitize_env(extracted)
     end
 
     def extract_session_context
-      return {} unless @current_request&.session
+      return {} unless @current_request&.respond_to?(:session) && @current_request.session
       
-      # Extract non-sensitive session data
-      session_data = @current_request.session.to_hash
-      @data_sanitizer.sanitize_session(session_data)
+      begin
+        # Extract non-sensitive session data
+        session_data = @current_request.session.to_hash
+        @data_sanitizer.sanitize_session(session_data)
+      rescue => e
+        VulnChaser.logger&.debug("VulnChaser: Failed to extract session context: #{e.message}")
+        {}
+      end
     end
 
     def extract_headers_context
-      return {} unless @current_request&.headers
+      return {} unless @current_request&.respond_to?(:headers) && @current_request.headers
       
-      # Extract security-relevant headers
-      header_keys = %w[
-        Authorization Content-Type Accept User-Agent Referer
-        X-Forwarded-For X-Real-IP X-Requested-With
-        X-CSRF-Token X-API-Key
-      ]
-      
-      extracted = {}
-      header_keys.each do |key|
-        extracted[key] = @current_request.headers[key] if @current_request.headers[key]
+      begin
+        # Extract security-relevant headers
+        header_keys = %w[
+          Authorization Content-Type Accept User-Agent Referer
+          X-Forwarded-For X-Real-IP X-Requested-With
+          X-CSRF-Token X-API-Key
+        ]
+        
+        extracted = {}
+        header_keys.each do |key|
+          extracted[key] = @current_request.headers[key] if @current_request.headers[key]
+        end
+        
+        @data_sanitizer.sanitize_headers(extracted)
+      rescue => e
+        VulnChaser.logger&.debug("VulnChaser: Failed to extract headers context: #{e.message}")
+        {}
       end
-      
-      @data_sanitizer.sanitize_headers(extracted)
     end
 
     def extract_local_variables(tp)
@@ -234,7 +259,11 @@ module VulnChaser
     end
 
     def record_enhanced_method_call(tp, trace_id)
+      # Check if trace exists
+      return unless @traces[trace_id]
+      
       source_code = extract_source_code(tp)
+      return unless source_code
       
       # SOR Framework: Enhanced context collection
       execution_context = extract_execution_context(tp)
@@ -242,6 +271,9 @@ module VulnChaser
       
       # Analyze parameter usage in the method
       param_usage = analyze_parameter_usage(tp, source_code, trace_id)
+      
+      # Ensure execution_trace array exists
+      @traces[trace_id][:execution_trace] ||= []
       
       @traces[trace_id][:execution_trace] << {
         method: "#{tp.defined_class}##{tp.method_id}",
@@ -262,10 +294,20 @@ module VulnChaser
     end
 
     def extract_source_code(tp)
-      method = tp.self.method(tp.method_id)
-      source = method.source
-      @data_sanitizer.sanitize_source_code(source)
-    rescue MethodSource::SourceNotFoundError, NameError
+      # Try to get method source using method_source gem
+      begin
+        method = tp.self.method(tp.method_id)
+        if method.respond_to?(:source)
+          source = method.source
+          return @data_sanitizer.sanitize_source_code(source)
+        end
+      rescue MethodSource::SourceNotFoundError, NameError, ArgumentError
+        # Continue to fallback
+      rescue => e
+        # Log other unexpected errors but continue
+        VulnChaser.logger&.debug("VulnChaser: Method source extraction failed: #{e.message}")
+      end
+      
       # Fallback: read source line from file
       read_source_line(tp.path, tp.lineno)
     rescue => e
@@ -284,12 +326,18 @@ module VulnChaser
     end
 
     def normalize_file_path(path)
-      return path unless defined?(Rails)
+      return path unless defined?(Rails) && Rails.respond_to?(:root) && Rails.root
       
-      # Make paths relative to Rails root for consistency
-      if path.start_with?(Rails.root.to_s)
-        path.sub(Rails.root.to_s, "")
-      else
+      begin
+        # Make paths relative to Rails root for consistency
+        rails_root = Rails.root.to_s
+        if path.start_with?(rails_root)
+          path.sub(rails_root, "")
+        else
+          path
+        end
+      rescue => e
+        # Fallback to original path if Rails.root is not available
         path
       end
     end
@@ -315,7 +363,13 @@ module VulnChaser
 
     def analyze_parameter_usage(tp, source_code, trace_id)
       # Get request parameters for this trace
-      request_params = @traces[trace_id][:request_info][:params] || {}
+      trace_data = @traces[trace_id]
+      return default_parameter_usage unless trace_data
+      
+      request_info = trace_data[:request_info]
+      return default_parameter_usage unless request_info
+      
+      request_params = request_info[:params] || {}
       
       usage_info = {
         uses_request_params: false,
@@ -380,6 +434,15 @@ module VulnChaser
       end
       
       'none'
+    end
+    
+    def default_parameter_usage
+      {
+        uses_request_params: false,
+        param_keys_used: [],
+        sanitization_detected: false,
+        direct_interpolation: false
+      }
     end
   end
 end
