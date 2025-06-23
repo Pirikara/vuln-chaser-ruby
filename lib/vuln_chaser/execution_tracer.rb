@@ -1,5 +1,8 @@
 require "json"
 require "method_source"
+require_relative "raw_data_collector"
+require_relative "semantic_analyzer"
+require_relative "context_enricher"
 
 module VulnChaser
   class ExecutionTracer
@@ -8,6 +11,10 @@ module VulnChaser
       @traces = {}
       @data_sanitizer = DataSanitizer.new
       @current_request = nil
+      # Phase 1: Pattern-free information collectors
+      @raw_data_collector = RawDataCollector.new
+      @semantic_analyzer = SemanticAnalyzer.new
+      @context_enricher = ContextEnricher.new
     end
 
     def start_trace(trace_id, env)
@@ -38,12 +45,22 @@ module VulnChaser
       trace_data = @traces.delete(trace_id)
       
       if trace_data && !trace_data[:execution_trace].empty?
+        # Phase 1: Collect comprehensive raw data without pattern matching
+        enhanced_data = collect_comprehensive_execution_data(trace_data)
+        
         return {
-          request_id: trace_data[:trace_id],
-          endpoint: "#{trace_data[:request_info][:method]} #{trace_data[:request_info][:path]}",
-          method: trace_data[:request_info][:method],
-          params: trace_data[:request_info][:params],
-          traces: trace_data[:execution_trace]
+          request_id: enhanced_data[:trace_id],
+          endpoint: "#{enhanced_data[:request_info][:method]} #{enhanced_data[:request_info][:path]}",
+          method: enhanced_data[:request_info][:method],
+          params: enhanced_data[:request_info][:params],
+          traces: enhanced_data[:execution_trace],
+          
+          # Phase 1: Rich structured data for LLM analysis
+          code_structure: enhanced_data[:code_structure],
+          data_flow_info: enhanced_data[:data_flow_info],
+          external_interactions: enhanced_data[:external_interactions],
+          semantic_analysis: enhanced_data[:semantic_analysis],
+          execution_context: enhanced_data[:execution_context]
         }
       end
       
@@ -51,6 +68,28 @@ module VulnChaser
     end
 
     private
+
+    def collect_comprehensive_execution_data(trace_data)
+      execution_trace = trace_data[:execution_trace]
+      
+      # Collect raw structured data
+      raw_data = @raw_data_collector.collect_execution_data(execution_trace)
+      
+      # Perform semantic analysis
+      semantic_data = @semantic_analyzer.analyze_semantic_structure(execution_trace)
+      
+      # Enrich with context
+      enriched_context = @context_enricher.enrich_execution_context(trace_data, execution_trace)
+      
+      trace_data.merge({
+        execution_trace: execution_trace,
+        code_structure: raw_data[:code_structure],
+        data_flow_info: raw_data[:data_flow],
+        external_interactions: raw_data[:external_interactions],
+        semantic_analysis: semantic_data,
+        execution_context: enriched_context
+      })
+    end
 
     def relevant_method?(tp)
       # Rails application code
