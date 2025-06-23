@@ -57,7 +57,7 @@ module VulnChaser
           path: trace_data[:endpoint] || 'unknown',
           params: sanitize_params(trace_data[:params] || {})
         },
-        execution_trace: trace_data[:traces] || []
+        execution_trace: trace_data[:execution_trace] || []  # Fixed: Use execution_trace field
       }
     end
 
@@ -82,6 +82,9 @@ module VulnChaser
 
     def post_to_core(batch_data)
       uri = URI("#{@core_endpoint}/api/traces/batch")
+      
+      # Log batch sending
+      VulnChaser.logger&.debug("VulnChaser: Sending batch #{batch_data[:batch_id]} with #{batch_data[:traces]&.length || 0} traces")
       
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = uri.scheme == 'https'

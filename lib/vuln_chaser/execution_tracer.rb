@@ -53,7 +53,7 @@ module VulnChaser
           endpoint: "#{enhanced_data[:request_info][:method]} #{enhanced_data[:request_info][:path]}",
           method: enhanced_data[:request_info][:method],
           params: enhanced_data[:request_info][:params],
-          traces: enhanced_data[:execution_trace],
+          execution_trace: enhanced_data[:execution_trace],  # Fixed: Core expects 'execution_trace'
           
           # Phase 1: Rich structured data for LLM analysis
           code_structure: enhanced_data[:code_structure],
@@ -338,10 +338,12 @@ module VulnChaser
         method = tp.self.method(tp.method_id)
         if method.respond_to?(:source)
           source = method.source
-          return @data_sanitizer.sanitize_source_code(source)
+          sanitized_source = @data_sanitizer.sanitize_source_code(source)
+          return sanitized_source
         end
       rescue MethodSource::SourceNotFoundError, NameError, ArgumentError
         # Continue to fallback
+        VulnChaser.logger&.debug("VulnChaser: Method source not found for #{tp.method_id}, using fallback")
       rescue => e
         # Log other unexpected errors but continue
         VulnChaser.logger&.debug("VulnChaser: Method source extraction failed: #{e.message}")
@@ -428,51 +430,44 @@ module VulnChaser
           end
         end
         
-        # Check for direct string interpolation
-        if source_code.match?(/#\{.*params.*\}/)
-          usage_info[:direct_interpolation] = true
-        end
+        # Pattern-Free Parameter Analysis
+        # Collect raw interpolation and method usage data without security classification
+        usage_info[:contains_interpolation] = source_code.include?('#{')
+        usage_info[:contains_params_reference] = source_code.include?('params')
+        usage_info[:direct_interpolation] = source_code.include?('#{') && source_code.include?('params')
         
-        # Check for sanitization methods
-        sanitization_patterns = [
-          'sanitize', 'escape', 'quote', 'validate', 'permit', 'allow',
-          'strip_tags', 'html_escape', 'sql_escape', 'filter'
-        ]
+        # Raw method detection without pattern-based security assessment
+        usage_info[:source_code] = source_code
+        usage_info[:method_calls] = source_code.scan(/\w+\(/).map { |m| m.chomp('(') }
         
-        if sanitization_patterns.any? { |pattern| source_code.include?(pattern) }
-          usage_info[:sanitization_detected] = true
-        end
+        # Let LLM determine sanitization and security implications
+        usage_info[:llm_analysis_required] = true
       end
       
       usage_info
     end
     
     def assess_risk_level(tp, source_code, param_usage)
-      method_name = tp.method_id.to_s
+      # Pattern-Free Risk Assessment: 
+      # Collect raw risk indicators without predefined security classifications
+      # Let LLM perform creative risk analysis based on execution context
       
-      # High risk: Direct param interpolation in potentially dangerous operations
-      if param_usage[:direct_interpolation] && !param_usage[:sanitization_detected]
-        if source_code.match?(/SELECT|INSERT|UPDATE|DELETE|WHERE/i) ||
-           source_code.match?(/system|exec|spawn|`/i) ||
-           method_name.match?(/open|read|write|delete|file/i)
-          return 'high'
-        end
-      end
+      risk_indicators = {
+        parameter_usage: param_usage,
+        source_code_present: !source_code.empty?,
+        direct_interpolation: param_usage[:direct_interpolation] || false,
+        sanitization_detected: param_usage[:sanitization_detected] || false,
+        method_name: tp.method_id.to_s,
+        execution_context: true
+      }
       
-      # Medium risk: Param usage without sanitization in potentially dangerous operations
-      if param_usage[:uses_request_params] && !param_usage[:sanitization_detected]
-        if source_code.match?(/SELECT|INSERT|UPDATE|DELETE|WHERE/i) ||
-           source_code.match?(/system|exec|spawn|`/i)
-          return 'medium'
-        end
-      end
-      
-      # Low risk: General param usage
-      if param_usage[:uses_request_params]
-        return 'low'
-      end
-      
-      'none'
+      # Return raw data instead of predetermined risk level
+      # LLM will determine actual risk based on full context
+      return {
+        risk_classification: 'llm_analysis_required',
+        raw_indicators: risk_indicators,
+        pattern_free_assessment: true
+      }
     end
     
     def default_parameter_usage
