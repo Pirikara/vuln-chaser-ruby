@@ -5,7 +5,7 @@ module VulnChaser
   class TraceBuffer
     FLUSH_SIZE_THRESHOLD = 1
     FLUSH_TIME_THRESHOLD = 30 # seconds
-    MAX_BUFFER_SIZE = 100 # prevent memory overflow
+    # MAX_BUFFER_SIZE removed - no buffer size limit
 
     def initialize
       @buffer = []
@@ -15,12 +15,7 @@ module VulnChaser
 
     def add_trace(trace_data)
       @mutex.synchronize do
-        # Prevent memory overflow
-        if @buffer.size >= MAX_BUFFER_SIZE
-          VulnChaser.logger&.warn("VulnChaser: Buffer overflow, dropping oldest traces")
-          @buffer.shift(MAX_BUFFER_SIZE / 2) # Remove half of buffer
-        end
-
+        # No buffer size limit - removed overflow protection
         @buffer << trace_data
         flush_if_needed
       end

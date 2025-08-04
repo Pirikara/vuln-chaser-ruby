@@ -52,42 +52,38 @@ RSpec.describe VulnChaser::ExecutionTracer do
     end
   end
 
-  describe 'security method detection' do
-    let(:sql_trace_point) do
-      double('TracePoint',
-        method_id: :find_by_sql,
-        defined_class: ActiveRecord::Base,
-        path: '/app/models/user.rb',
-        lineno: 10
-      )
+  describe 'project detection methods' do
+    let(:rails_app_path) { '/path/to/rails/app/controllers/users_controller.rb' }
+    let(:gem_path) { '/path/to/gems/devise-4.8.0/lib/devise.rb' }
+    let(:custom_path) { '/path/to/custom/lib/security.rb' }
+
+    before do
+      # Mock Rails for testing
+      allow(tracer).to receive(:rails_project?).and_return(true)
+      allow(Rails).to receive_message_chain(:root, :to_s).and_return('/path/to/rails')
+      allow(Dir).to receive(:exist?).and_return(true)
+      
+      # Setup config for testing
+      VulnChaser::Config.traced_gems = ['devise']
+      VulnChaser::Config.custom_paths = ['custom/lib']
     end
 
-    let(:auth_trace_point) do
-      double('TracePoint',
-        method_id: :authenticate,
-        defined_class: User,
-        path: '/app/models/user.rb',
-        lineno: 15
-      )
-    end
-
-    describe '#dangerous_framework_method?' do
-      it 'detects SQL-related methods' do
-        expect(tracer.send(:dangerous_framework_method?, sql_trace_point)).to be true
-      end
-
-      it 'detects authentication methods' do
-        expect(tracer.send(:dangerous_framework_method?, auth_trace_point)).to be true
+    describe '#project_root_code?' do
+      it 'detects Rails app code' do
+        expect(tracer.send(:project_root_code?, rails_app_path)).to be true
       end
     end
 
-    describe '#important_gem_method?' do
-      let(:devise_trace_point) do
-        double('TracePoint', path: '/gems/devise/lib/devise.rb')
+    describe '#user_configured_gem_code?' do
+      it 'detects configured gem code' do
+        allow(tracer).to receive(:traced_gem_paths).and_return(['/path/to/gems/devise-4.8.0'])
+        expect(tracer.send(:user_configured_gem_code?, gem_path)).to be true
       end
+    end
 
-      it 'detects security gem methods' do
-        expect(tracer.send(:important_gem_method?, devise_trace_point)).to be true
+    describe '#custom_path_code?' do
+      it 'detects custom path code' do
+        expect(tracer.send(:custom_path_code?, custom_path)).to be true
       end
     end
   end

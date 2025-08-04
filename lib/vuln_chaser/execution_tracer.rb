@@ -15,6 +15,10 @@ module VulnChaser
       @raw_data_collector = RawDataCollector.new
       @semantic_analyzer = SemanticAnalyzer.new
       @context_enricher = ContextEnricher.new
+      # Loop detection for duplicate method calls
+      @method_call_cache = {}
+      # Cache for bundled gem paths
+      @bundled_gem_paths = nil
     end
 
     def start_trace(trace_id, env)
@@ -34,6 +38,9 @@ module VulnChaser
         execution_trace: []
       }
 
+      # Reset method call cache for new trace
+      @method_call_cache[trace_id] = {}
+
       @trace_point = TracePoint.new(:call) do |tp|
         record_enhanced_method_call(tp, trace_id) if relevant_method?(tp)
       end
@@ -43,6 +50,9 @@ module VulnChaser
     def finish_trace(trace_id)
       @trace_point&.disable
       trace_data = @traces.delete(trace_id)
+      
+      # Clean up method call cache for this trace
+      @method_call_cache.delete(trace_id)
       
       if trace_data && !trace_data[:execution_trace].empty?
         # Phase 1: Collect comprehensive raw data without pattern matching
@@ -92,23 +102,162 @@ module VulnChaser
     end
 
     def relevant_method?(tp)
-      # Rails application code
-      return true if rails_app_code?(tp.path)
-      
-      # App-specific paths
-      return true if tp.path.include?('/app/')
+      return true if project_root_code?(tp.path)
+      return true if custom_path_code?(tp.path)
+      return true if user_configured_gem_code?(tp.path)
       
       false
     end
 
-    def rails_app_code?(path)
-      return false unless defined?(Rails) && Rails.respond_to?(:root) && Rails.root
+
+    def project_root_code?(path)
+      manual_roots = VulnChaser::Config.project_roots
+      if manual_roots && !manual_roots.empty?
+        return manual_roots.any? { |root| path.start_with?(root) }
+      end
+      
+      return false if VulnChaser::Config.disable_auto_detection
+      
+      project_roots.any? { |root_path| path.start_with?(root_path) }
+    end
+    
+    def project_roots
+      @project_roots ||= detect_project_roots
+    end
+    
+    def detect_project_roots
+      roots = []
+      
+      if rails_project?
+        rails_root = Rails.root.to_s
+        rails_dirs = %w[app config lib].map { |dir| File.join(rails_root, dir) }
+        existing_dirs = rails_dirs.select { |dir| Dir.exist?(dir) }
+        roots.concat(existing_dirs)
+        VulnChaser.logger&.info("VulnChaser: Detected Rails project, tracing: #{existing_dirs.join(', ')}")
+      end
+      
+      if gem_project?
+        gem_root = detect_gem_root
+        gem_dirs = %w[lib src].map { |dir| File.join(gem_root, dir) }
+        existing_dirs = gem_dirs.select { |dir| Dir.exist?(dir) }
+        roots.concat(existing_dirs)
+        VulnChaser.logger&.info("VulnChaser: Detected Gem project, tracing: #{existing_dirs.join(', ')}")
+      end
+      
+      if sinatra_project?
+        sinatra_root = detect_sinatra_root
+        sinatra_dirs = %w[app lib routes].map { |dir| File.join(sinatra_root, dir) }
+        existing_dirs = sinatra_dirs.select { |dir| Dir.exist?(dir) }
+        roots.concat(existing_dirs)
+        VulnChaser.logger&.info("VulnChaser: Detected Sinatra project, tracing: #{existing_dirs.join(', ')}")
+      end
+      
+      if roots.empty?
+        generic_root = detect_generic_ruby_root
+        generic_dirs = %w[lib src app].map { |dir| File.join(generic_root, dir) }
+        existing_dirs = generic_dirs.select { |dir| Dir.exist?(dir) }
+        roots.concat(existing_dirs)
+        VulnChaser.logger&.info("VulnChaser: Detected generic Ruby project, tracing: #{existing_dirs.join(', ')}")
+      end
+      
+      roots.uniq
+    end
+    
+    def rails_project?
+      defined?(Rails) && Rails.respond_to?(:root) && Rails.root
+    end
+    
+    def gem_project?
+      current_dir = Dir.pwd
+      Dir.glob(File.join(current_dir, '*.gemspec')).any?
+    end
+    
+    def sinatra_project?
+      gemfile_path = File.join(Dir.pwd, 'Gemfile')
+      return false unless File.exist?(gemfile_path)
+      
+      File.read(gemfile_path).include?('sinatra')
+    rescue
+      false
+    end
+    
+    def detect_gem_root
+      current_dir = Dir.pwd
+      gemspec_files = Dir.glob(File.join(current_dir, '*.gemspec'))
+      
+      if gemspec_files.any?
+        File.dirname(gemspec_files.first)
+      else
+        current_dir
+      end
+    end
+    
+    def detect_sinatra_root
+      current_dir = Dir.pwd
+      
+      path = current_dir
+      while path != '/'
+        return path if File.exist?(File.join(path, 'Gemfile'))
+        path = File.dirname(path)
+      end
+      
+      current_dir
+    end
+    
+    def detect_generic_ruby_root
+      current_dir = Dir.pwd
+      indicators = %w[Gemfile Rakefile .git]
+      
+      path = current_dir
+      while path != '/'
+        if indicators.any? { |indicator| File.exist?(File.join(path, indicator)) }
+          return path
+        end
+        path = File.dirname(path)
+      end
+      
+      current_dir
+    end
+    
+    # User-configured gem tracing
+    def user_configured_gem_code?(path)
+      return false unless VulnChaser::Config.traced_gems
+      return false if VulnChaser::Config.traced_gems.empty?
+      
+      traced_gem_paths.any? { |gem_path| path.start_with?(gem_path) }
+    end
+    
+    def traced_gem_paths
+      @traced_gem_paths ||= discover_user_configured_gem_paths
+    end
+    
+    def discover_user_configured_gem_paths
+      return [] unless defined?(Bundler)
+      return [] unless VulnChaser::Config.traced_gems
+      
+      user_gems = VulnChaser::Config.traced_gems
+      gem_paths = []
       
       begin
-        path.start_with?(Rails.root.to_s)
+        Bundler.load.specs.each do |spec|
+          if user_gems.include?(spec.name)
+            gem_path = spec.full_gem_path
+            gem_paths << gem_path if gem_path && Dir.exist?(gem_path)
+          end
+        end
+        
+        VulnChaser.logger&.info("VulnChaser: User configured #{gem_paths.size} gems for tracing: #{user_gems.join(', ')}")
+        gem_paths
       rescue => e
-        false
+        VulnChaser.logger&.warn("VulnChaser: Failed to resolve user configured gems: #{e.message}")
+        []
       end
+    end
+    
+    def custom_path_code?(path)
+      return false unless VulnChaser::Config.custom_paths
+      
+      VulnChaser::Config.custom_paths.any? { |custom_path| path.include?(custom_path) }
     end
 
     # SOR Framework: Enhanced context extraction methods
@@ -301,6 +450,10 @@ module VulnChaser
       # Check if trace exists
       return unless @traces[trace_id]
       
+      # Check for duplicate method calls (loop detection)
+      method_signature = generate_method_signature(tp)
+      return if duplicate_method_call?(trace_id, method_signature)
+      
       source_code = extract_source_code(tp)
       return unless source_code
       
@@ -328,6 +481,9 @@ module VulnChaser
         resource_context: resource_context,
         timestamp: Time.now.iso8601(3)
       }
+      
+      # Mark this method call as seen
+      mark_method_call_seen(trace_id, method_signature)
     rescue => e
       VulnChaser.logger&.debug("VulnChaser: Failed to record enhanced method call: #{e}")
     end
@@ -477,6 +633,25 @@ module VulnChaser
         sanitization_detected: false,
         direct_interpolation: false
       }
+    end
+
+    # Loop detection methods
+    def generate_method_signature(tp)
+      "#{tp.defined_class}##{tp.method_id}@#{normalize_file_path(tp.path)}:#{tp.lineno}"
+    end
+
+    def duplicate_method_call?(trace_id, method_signature)
+      cache = @method_call_cache[trace_id]
+      return false unless cache
+      
+      cache.key?(method_signature)
+    end
+
+    def mark_method_call_seen(trace_id, method_signature)
+      cache = @method_call_cache[trace_id]
+      return unless cache
+      
+      cache[method_signature] = true
     end
   end
 end
