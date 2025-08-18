@@ -8,7 +8,6 @@ VulnChaser is an Interactive Application Security Testing (IAST) tool that provi
 - **Zero File I/O**: All operations performed in memory for optimal performance
 - **Multi-Application Support**: Works with Rails applications, Ruby gems, CLI tools, and scripts
 - **LLM-Powered Detection**: Integrates with vuln-chaser-core for AI-powered vulnerability analysis
-- **SOR Framework**: Advanced Subject-Operation-Resource relationship analysis
 - **Data Flow Tracking**: Traces data from sources (user input) to sinks (database, system calls)
 
 ## Prerequisites
@@ -312,7 +311,6 @@ VulnChaser captures and analyzes:
 3. **Data Flow**: How user input flows through your application
 4. **Security Context**: Authentication, authorization, validation steps
 5. **Risk Assessment**: Direct interpolation, missing sanitization
-6. **SOR Analysis**: Subject-Operation-Resource relationship evaluation
 
 ### Sample Analysis Output
 
