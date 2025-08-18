@@ -33,7 +33,6 @@ module VulnChaser
           path: request&.path || 'unknown',
           params: @data_sanitizer.sanitize_params(request&.params || {})
         },
-        # SOR Framework: Enhanced context collection
         request_context: extract_request_context,
         execution_trace: []
       }
@@ -260,7 +259,6 @@ module VulnChaser
       VulnChaser::Config.custom_paths.any? { |custom_path| path.include?(custom_path) }
     end
 
-    # SOR Framework: Enhanced context extraction methods
     def extract_request_context
       return {} unless @current_request
       
@@ -457,7 +455,6 @@ module VulnChaser
       source_code = extract_source_code(tp)
       return unless source_code
       
-      # SOR Framework: Enhanced context collection
       execution_context = extract_execution_context(tp)
       resource_context = extract_resource_context(tp)
       
@@ -472,11 +469,8 @@ module VulnChaser
         file: normalize_file_path(tp.path),
         line: tp.lineno,
         source: source_code,
-        # Legacy context for backward compatibility
-        context: build_security_context(tp, source_code),
         parameter_usage: param_usage,
         risk_level: assess_risk_level(tp, source_code, param_usage),
-        # SOR Framework: Enhanced context data
         execution_context: execution_context,
         resource_context: resource_context,
         timestamp: Time.now.iso8601(3)
@@ -539,23 +533,6 @@ module VulnChaser
       end
     end
 
-    def build_security_context(tp, source_code)
-      # Simplified context for backward compatibility
-      # SOR Framework will handle detailed analysis on Core side
-      context = []
-      method_name = tp.method_id.to_s
-      class_name = tp.defined_class&.name || ''
-
-      # Basic pattern detection for immediate context
-      context << "SQL-related" if source_code.match?(/SELECT|INSERT|UPDATE|DELETE|FROM|WHERE/i)
-      context << "File operation" if method_name.match?(/open|read|write|delete|file/i)
-      context << "System command" if source_code.match?(/system|exec|spawn|`/i)
-      context << "Authentication" if method_name.match?(/auth|login|sign|current_user/i)
-      context << "Cryptographic" if method_name.match?(/encrypt|decrypt|hash|digest/i)
-      context << "Dynamic evaluation" if source_code.match?(/eval|send|define_method/i)
-
-      context.empty? ? "General method execution" : context.join(", ")
-    end
 
 
     def analyze_parameter_usage(tp, source_code, trace_id)

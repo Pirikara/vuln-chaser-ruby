@@ -64,7 +64,6 @@ module VulnChaser
       sanitized
     end
 
-    # SOR Framework: Enhanced sanitization methods
     def sanitize_env(env_data)
       return {} unless env_data.is_a?(Hash)
       
